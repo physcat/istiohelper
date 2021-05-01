@@ -1,8 +1,6 @@
 package istiohelper
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 	"time"
 )
@@ -18,7 +16,7 @@ const (
 // Helper object holds the state
 type Helper struct {
 	ok            bool
-	debug         bool
+	logger        func(string)
 	readyPort     string
 	quitPort      string
 	readyEndpoint string
@@ -33,16 +31,16 @@ type Helper struct {
 // 15021 - /quitquitquit
 // If not set try everything
 func ReadyPort(p string) func(*Helper) error {
-	return func(d *Helper) error {
-		d.readyPort = p
+	return func(h *Helper) error {
+		h.readyPort = p
 		return nil
 	}
 }
 
 // ReadyEndpoint default "/healhtz/ready"
 func ReadyEndpoint(r string) func(*Helper) error {
-	return func(d *Helper) error {
-		d.readyEndpoint = r
+	return func(h *Helper) error {
+		h.readyEndpoint = r
 		return nil
 	}
 }
@@ -52,30 +50,34 @@ func ReadyEndpoint(r string) func(*Helper) error {
 // 15021 - /quitquitquit
 // Quitting Envoy may not be useful
 func QuitPort(p string) func(*Helper) error {
-	return func(d *Helper) error {
-		d.quitPort = p
+	return func(h *Helper) error {
+		h.quitPort = p
 		return nil
 	}
 }
 
 // QuitEndpoint default "/quitquitquit"
 func QuitEndpoint(r string) func(*Helper) error {
-	return func(d *Helper) error {
-		d.readyEndpoint = r
+	return func(h *Helper) error {
+		h.readyEndpoint = r
 		return nil
 	}
 }
 
-// Debug will enable logging for debugging
-var Debug func(d *Helper) error = func(d *Helper) error {
-	d.debug = true
-	return nil
+// Logger - if a logger function is provided the health check
+// will write basic trace information
+func Logger(logger func(string)) func(*Helper) error {
+	return func(h *Helper) error {
+		h.logger = logger
+		return nil
+	}
 }
 
 // Wait for Istio (Envoy) proxy to report ready
 func Wait(ok bool, options ...func(*Helper) error) *Helper {
 	h := &Helper{
-		ok: ok,
+		ok:     ok,
+		logger: func(string) {},
 	}
 	if !ok {
 		return h
@@ -91,13 +93,13 @@ func Wait(ok bool, options ...func(*Helper) error) *Helper {
 		if h.readyEndpoint == "" {
 			h.readyEndpoint = "/ready"
 		}
-		h.readyAddr = fmt.Sprintf("http://localhost:%s%s", h.readyPort, h.readyEndpoint)
+		h.readyAddr = "http://localhost:" + h.readyPort + ":" + h.readyEndpoint
 	}
 	if h.quitAddr != "" {
 		if h.quitEndpoint == "" {
 			h.quitEndpoint = "/quitquitquit"
 		}
-		h.quitAddr = fmt.Sprintf("http://localhost:%s%s", h.quitPort, h.quitEndpoint)
+		h.quitAddr = "http://localhost:%s%s" + h.quitPort + h.quitEndpoint
 	}
 
 	for {
@@ -122,16 +124,12 @@ func Wait(ok bool, options ...func(*Helper) error) *Helper {
 func (h *Helper) checkReady(addr string) bool {
 	resp, err := http.Get(addr)
 	if err != nil {
-		if h.debug {
-			log.Printf("http.Get(%s) - %v\n", addr, err)
-		}
+		h.logger("http.Get(" + addr + ") - " + err.Error())
 		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		if h.debug {
-			log.Printf("http.Get(%s) - %v\n", addr, resp)
-		}
+		h.logger("http.Get(" + addr + ") - " + resp.Status)
 		return false
 	}
 	return true
@@ -150,8 +148,6 @@ func (h *Helper) Quit() {
 	if err != nil {
 		return
 	}
-	if h.debug {
-		log.Printf("http.Post(%s) - %v\n", h.quitAddr, resp)
-	}
+	h.logger("http.Post(" + addr + ") - " + resp.Status)
 	defer resp.Body.Close()
 }
