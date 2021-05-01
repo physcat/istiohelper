@@ -115,6 +115,7 @@ func Wait(ok bool, options ...func(*Helper) error) *Helper {
 		if ok := h.checkReady(envoyReady); ok {
 			return h
 		}
+		time.Sleep(time.Second)
 	}
 }
 

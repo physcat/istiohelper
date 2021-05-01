@@ -15,7 +15,7 @@ import (
 
 func main() {
     fmt.Println("Waiting for Istio sidecar")
-    defer istiohelper.Wait(false).Quit()
+    defer istiohelper.Wait(true).Quit()
     fmt.Println("Istio sidecar is ready")
 
 
