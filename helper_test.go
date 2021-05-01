@@ -14,6 +14,8 @@ func ExampleWait() {
 
 func ExampleWait_withPort() {
 	fmt.Println("Not waiting for Istio proxy")
-	defer istiohelper.Wait(false, istiohelper.Port("15000")).Quit()
+	defer istiohelper.Wait(false,
+		istiohelper.Port("15000"),
+		istiohelper.Debug).Quit()
 	// Output: Not waiting for Istio proxy
 }

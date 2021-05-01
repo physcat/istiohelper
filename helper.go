@@ -2,6 +2,7 @@ package istiohelper
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
@@ -9,6 +10,7 @@ import (
 // Helper object holds the state
 type Helper struct {
 	ok            bool
+	debug         bool
 	port          string
 	readyEndpoint string
 	quitEndpoint  string
@@ -23,6 +25,12 @@ func Port(p string) func(*Helper) error {
 		d.port = p
 		return nil
 	}
+}
+
+// Debug will enable logging for debugging
+var Debug func(d *Helper) error = func(d *Helper) error {
+	d.debug = true
+	return nil
 }
 
 // Wait for Istio (Envoy) proxy to report ready
@@ -49,11 +57,17 @@ func Wait(ok bool, options ...func(*Helper) error) *Helper {
 	for {
 		resp, err := http.Get(h.readyAddr)
 		if err != nil {
+			if h.debug {
+				log.Printf("http.Get(%s) - %v\n", h.readyAddr, err)
+			}
 			time.Sleep(time.Second)
 			continue
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
+			if h.debug {
+				log.Printf("http.Get(%s) - %v\n", h.readyAddr, resp)
+			}
 			time.Sleep(time.Second)
 			continue
 		}
@@ -69,6 +83,9 @@ func (h *Helper) Quit() {
 	resp, err := http.Post(h.quitAddr, "application/json", nil)
 	if err != nil {
 		return
+	}
+	if h.debug {
+		log.Printf("http.Post(%s) - %v\n", h.quitAddr, resp)
 	}
 	defer resp.Body.Close()
 }
