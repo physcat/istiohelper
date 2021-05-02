@@ -116,14 +116,14 @@ func Wait(options ...func(*Helper) error) *Helper {
 		condition: true,
 		logger:    func(string) {},
 	}
-	if !h.condition {
-		return h
-	}
-
 	for _, option := range options {
 		if err := option(h); err != nil {
 			return nil
 		}
+	}
+
+	if !h.condition {
+		return h
 	}
 
 	if h.readyPort != "" {
