@@ -1,23 +1,34 @@
 package istiohelper_test
 
 import (
-	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/physcat/istiohelper"
 )
 
-func ExampleWait() {
-	fmt.Println("Not waiting for Istio proxy")
-	defer istiohelper.Wait(false).Quit()
-	// Output: Not waiting for Istio proxy
+func ExampleHTTPClient() {
+	c := http.Client{
+		Timeout: time.Second,
+	}
+	defer istiohelper.Wait(true, istiohelper.HTTPClient(&c)).Quit()
 }
 
-func ExampleWait_withPort() {
-	fmt.Println("Not waiting for Istio proxy")
+func ExampleWait() {
+	defer istiohelper.Wait(true).Quit()
+}
+
+func ExampleLegacy() {
+	defer istiohelper.Wait(true, istiohelper.Legacy).Quit()
+}
+
+func ExampleReadyPort() {
+	defer istiohelper.Wait(true, istiohelper.ReadyPort("15000")).Quit()
+}
+
+func ExampleLogger() {
 	defer istiohelper.Wait(false,
-		istiohelper.ReadyPort("15000"),
 		istiohelper.Logger(func(msg string) { log.Println(msg) }),
 	).Quit()
-	// Output: Not waiting for Istio proxy
 }

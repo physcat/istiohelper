@@ -1,13 +1,15 @@
 package istiohelper
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
 
 const (
-	envoyReady = "http://localhost:15000/ready"
-	istioReady = "http://localhost:15021/healthz/ready"
+	envoyReady      = "http://localhost:15000/ready"
+	istioOlderReady = "http://localhost:15020/healthz/ready"
+	istioReady      = "http://localhost:15021/healthz/ready"
 
 	//	envoyQuit = "http://localhost:15000/quitquitquit"
 	istioQuit = "http://localhost:15020/quitquitquit"
@@ -16,7 +18,9 @@ const (
 // Helper object holds the state
 type Helper struct {
 	ok            bool
+	legacy        bool
 	logger        func(string)
+	httpClient    *http.Client
 	readyPort     string
 	quitPort      string
 	readyEndpoint string
@@ -25,10 +29,29 @@ type Helper struct {
 	quitAddr      string
 }
 
-// ReadyPort to specify health check port
-// 15000 - envoy
-// 15020 - /healthz/ready
-// 15021 - /quitquitquit
+// HTTPClient can be used to set a custom http client for
+// doing the Istio checks.
+func HTTPClient(c *http.Client) func(*Helper) error {
+	return func(h *Helper) error {
+		if c == nil {
+			return fmt.Errorf("http.Client cannot be nil")
+		}
+		h.httpClient = c
+		return nil
+	}
+}
+
+// Legacy - try other port and endpoint combinations that
+// may help with older versions of Istio sidecars.
+var Legacy = func(h *Helper) error {
+	h.legacy = true
+	return nil
+}
+
+// ReadyPort - specify a custom health check port.
+// - 15000 - envoy
+// - 15020 - /healthz/ready
+// - 15021 - /quitquitquit
 // If not set try everything
 func ReadyPort(p string) func(*Helper) error {
 	return func(h *Helper) error {
@@ -37,7 +60,8 @@ func ReadyPort(p string) func(*Helper) error {
 	}
 }
 
-// ReadyEndpoint default "/healhtz/ready"
+// ReadyEndpoint - specify a custom ready endpoint to check.
+// default "/healhtz/ready"
 func ReadyEndpoint(r string) func(*Helper) error {
 	return func(h *Helper) error {
 		h.readyEndpoint = r
@@ -45,10 +69,10 @@ func ReadyEndpoint(r string) func(*Helper) error {
 	}
 }
 
-// QuitPort to specify the port to call quit
-// 15000 - envoy
-// 15021 - /quitquitquit
-// Quitting Envoy may not be useful
+// QuitPort - specify a custom port to call the quit endpoint.
+// - 15000 Envoy
+// - 15021 Istio
+// Quitting Envoy may not be as useful as you might think
 func QuitPort(p string) func(*Helper) error {
 	return func(h *Helper) error {
 		h.quitPort = p
@@ -56,7 +80,8 @@ func QuitPort(p string) func(*Helper) error {
 	}
 }
 
-// QuitEndpoint default "/quitquitquit"
+// QuitEndpoint - specify a custom quit endpoint.
+// default "/quitquitquit"
 func QuitEndpoint(r string) func(*Helper) error {
 	return func(h *Helper) error {
 		h.readyEndpoint = r
@@ -65,7 +90,10 @@ func QuitEndpoint(r string) func(*Helper) error {
 }
 
 // Logger - if a logger function is provided the health check
-// will write basic trace information
+// will write basic trace information.
+// To avoid dependencies on external packages,
+// the log function is a basic `func(string)`. It is up to
+// the user to display or write the string.
 func Logger(logger func(string)) func(*Helper) error {
 	return func(h *Helper) error {
 		h.logger = logger
@@ -110,12 +138,17 @@ func Wait(ok bool, options ...func(*Helper) error) *Helper {
 			}
 			return h
 		}
-		// No preference, try everything
 		if ok := h.checkReady(istioReady); ok {
 			return h
 		}
-		if ok := h.checkReady(envoyReady); ok {
-			return h
+
+		if h.legacy {
+			if ok := h.checkReady(envoyReady); ok {
+				return h
+			}
+			if ok := h.checkReady(istioOlderReady); ok {
+				return h
+			}
 		}
 		time.Sleep(time.Second)
 	}
