@@ -17,7 +17,7 @@ const (
 
 // Helper object holds the state
 type Helper struct {
-	ok            bool
+	condition     bool
 	legacy        bool
 	logger        func(string)
 	httpClient    *http.Client
@@ -27,6 +27,15 @@ type Helper struct {
 	quitEndpoint  string
 	readyAddr     string
 	quitAddr      string
+}
+
+// Condition - pass a bool from a flag or config file
+// to enable or disable istio checks
+func Condition(t bool) func(*Helper) error {
+	return func(h *Helper) error {
+		h.condition = t
+		return nil
+	}
 }
 
 // HTTPClient can be used to set a custom http client for
@@ -102,12 +111,12 @@ func Logger(logger func(string)) func(*Helper) error {
 }
 
 // Wait for Istio (Envoy) proxy to report ready
-func Wait(ok bool, options ...func(*Helper) error) *Helper {
+func Wait(options ...func(*Helper) error) *Helper {
 	h := &Helper{
-		ok:     ok,
-		logger: func(string) {},
+		condition: true,
+		logger:    func(string) {},
 	}
-	if !ok {
+	if !h.condition {
 		return h
 	}
 
@@ -170,7 +179,7 @@ func (h *Helper) checkReady(addr string) bool {
 
 // Quit Istio (Envoy) proxy
 func (h *Helper) Quit() {
-	if !h.ok {
+	if !h.condition {
 		return
 	}
 	addr := istioQuit
